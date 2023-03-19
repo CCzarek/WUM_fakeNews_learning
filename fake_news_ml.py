@@ -1,3 +1,4 @@
+#%%
 import pandas as pd
 import numpy as np
 #import matplotlib.pyplot as plt
@@ -20,6 +21,7 @@ df = df.drop(df.columns[0], axis=1)
 df = df.drop_duplicates()
 
 
+
 # print(df.head())
 # print(len(df['text'].unique()))
 #print((df[df['text'].duplicated(keep=False)])["text"])
@@ -40,18 +42,35 @@ print(na_ratio_cols)
 df.info()
 df.hist(column='Ground Label')
 
+# filling empty and na spaces
+def changeNA(text):
+    if not isinstance(text, str) or pd.isnull(text) or len(text) < 3:
+        return "brak danych"
+    return text
 
+df['title'] = df['title'].apply(lambda x: changeNA(x))
+df['text'] = df['text'].apply(lambda x: changeNA(x))
+#%%
 
 # contractions
 # (nie dziala mi ten import wiec nie testowalem tej sekcji)
+# (mi dziala)
 import contractions
 
+# jakies tureckie znaczki byly ktorych funkcja fix nie ogarniala, stad try except
 def remove_contractions(text):
-    return ' '.join([contractions.fix(word) for word in text.split()])
+    try:
+        s = ' '.join([contractions.fix(word) for word in text.split()])
+    except:
+        s = text
+    return s
 
 df['title'] = df['title'].apply(lambda x: remove_contractions(x))
 df['text'] = df['text'].apply(lambda x: remove_contractions(x))
+#%%
 
+import nltk
+nltk.download('stopwords')
 
 # stop words
 from nltk.corpus import stopwords
@@ -72,13 +91,34 @@ def stem_words(text):
 
 
 df['title'] = df['title'].apply(lambda x: remove_stopwords(x))
+
+
 # takes some time:
 #df["text"] = df["text"].apply(lambda x: stem_words(x))
 
 #print(df['title'].head())
+from nltk.tokenize import word_tokenize
 
-# TODO tokenazation, new columns, removing non english records
+df['tokenised_text'] = df['text'].apply(lambda x: word_tokenize(x))
+df['tokenised_title'] = df['title'].apply(lambda x: word_tokenize(x))
 
+def count_proper_nouns(token_text):
+    proper_nouns_counter = 0
+    tagged = nltk.pos_tag(token_text)
+    for i in range(len(tagged)):
+        word, pos = tagged[i]
+        if pos == 'NNP':
+            if i!=0 and not tagged[i-1][1] in ['.', '!', '?']:
+                proper_nouns_counter+=1
+    return proper_nouns_counter
+#Zliczanie nazw wlasnych - zajmuje duzo czasu                
+df['proper_nouns_counter'] = df['tokenised_text'].apply(lambda x: count_proper_nouns(x))
+df['words_counter'] = df['text'].apply(lambda x: len(x.split()))
+
+df['coma_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == ',', arr))))
+df['exclamation_mark_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == '!', arr))))
+df['question_mark_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == '?', arr))))
+#%%
 
 
 # splitting data
