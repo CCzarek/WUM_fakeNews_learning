@@ -95,7 +95,7 @@ def stem_words(text):
     return " ".join([stemmer.stem(word) for word in text.split()])
 
 
-df['title'] = df['title'].apply(lambda x: remove_stopwords(x))
+df['title'] = df['title'].apply(lambda x: stem_words(x))
 # takes some time:
 df["text"] = df["text"].apply(lambda x: stem_words(x))
 
