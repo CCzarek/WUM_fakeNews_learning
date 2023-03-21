@@ -63,9 +63,7 @@ df['text'] = df['text'].apply(lambda x: changeNA(x))
 #%%
 
 # contractions
-# (nie dziala mi ten import wiec nie testowalem tej sekcji)
-# (mi dziala)
-
+# zamienia skróty na pełne słowa (np: u - you, don't - do not)
 # jakies tureckie znaczki byly ktorych funkcja fix nie ogarniala, stad try except
 def remove_contractions(text):
     try:
@@ -80,6 +78,7 @@ df['text'] = df['text'].apply(lambda x: remove_contractions(x))
 
 
 # stop words
+# usuwa słowa nie noszące informacji same w sobie, np zdanie "Donald Trump is being under control of police" zamieni na "Donald Trump under control police"
 stop_words = set(stopwords.words('english'))
 stop_words.add('http')
 def remove_stopwords(text):
@@ -90,19 +89,20 @@ df['text'] = df['text'].apply(lambda x: remove_stopwords(x))
 
 
 #stemming
+# zamienia słowa w ich podstawę bez końcówek
 stemmer = PorterStemmer()
 def stem_words(text):
     return " ".join([stemmer.stem(word) for word in text.split()])
 
 
 df['title'] = df['title'].apply(lambda x: remove_stopwords(x))
-
-
 # takes some time:
-#df["text"] = df["text"].apply(lambda x: stem_words(x))
+df["text"] = df["text"].apply(lambda x: stem_words(x))
 
 #print(df['title'].head())
 
+#tokenizacja
+#Tworzymy nową kolumnę z tablicą słów użytych w tekscie, bo komp i tak nie rozumie zdan tylko se ogarnia gdzie byly jakie slowa uzywane z jakimi innymi slwoami
 df['tokenised_text'] = df['text'].apply(lambda x: word_tokenize(x))
 df['tokenised_title'] = df['title'].apply(lambda x: word_tokenize(x))
 
@@ -150,9 +150,3 @@ na_ratio_cols = X_val.isna().mean(axis=0)
 print(na_ratio_cols)
 
 corrMatrix=df.corr()
-
-sns.scatterplot(data=df, x='proper_nouns_counter', y='Ground Label')
-plt.show()
-
-
-plt.show()
