@@ -3,8 +3,18 @@ import pandas as pd
 import numpy as np
 #import matplotlib.pyplot as plt
 import warnings
-#import shap
 from matplotlib import pyplot as plt
+import contractions
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+
+
+nltk.download('stopwords')
+
 
 warnings.filterwarnings('ignore')
 np.random.seed = 42
@@ -55,7 +65,6 @@ df['text'] = df['text'].apply(lambda x: changeNA(x))
 # contractions
 # (nie dziala mi ten import wiec nie testowalem tej sekcji)
 # (mi dziala)
-import contractions
 
 # jakies tureckie znaczki byly ktorych funkcja fix nie ogarniala, stad try except
 def remove_contractions(text):
@@ -69,11 +78,8 @@ df['title'] = df['title'].apply(lambda x: remove_contractions(x))
 df['text'] = df['text'].apply(lambda x: remove_contractions(x))
 #%%
 
-import nltk
-nltk.download('stopwords')
 
 # stop words
-from nltk.corpus import stopwords
 stop_words = set(stopwords.words('english'))
 stop_words.add('http')
 def remove_stopwords(text):
@@ -84,7 +90,6 @@ df['text'] = df['text'].apply(lambda x: remove_stopwords(x))
 
 
 #stemming
-from nltk.stem import PorterStemmer
 stemmer = PorterStemmer()
 def stem_words(text):
     return " ".join([stemmer.stem(word) for word in text.split()])
@@ -97,7 +102,6 @@ df['title'] = df['title'].apply(lambda x: remove_stopwords(x))
 #df["text"] = df["text"].apply(lambda x: stem_words(x))
 
 #print(df['title'].head())
-from nltk.tokenize import word_tokenize
 
 df['tokenised_text'] = df['text'].apply(lambda x: word_tokenize(x))
 df['tokenised_title'] = df['title'].apply(lambda x: word_tokenize(x))
@@ -111,18 +115,17 @@ def count_proper_nouns(token_text):
             if i!=0 and not tagged[i-1][1] in ['.', '!', '?']:
                 proper_nouns_counter+=1
     return proper_nouns_counter
-#Zliczanie nazw wlasnych - zajmuje duzo czasu                
-df['proper_nouns_counter'] = df['tokenised_text'].apply(lambda x: count_proper_nouns(x))
+#Zliczanie nazw wlasnych - zajmuje duzo czasu
 df['words_counter'] = df['text'].apply(lambda x: len(x.split()))
-
-df['coma_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == ',', arr))))
-df['exclamation_mark_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == '!', arr))))
-df['question_mark_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == '?', arr))))
+                
+df['proper_nouns_counter'] = df['tokenised_text'].apply(lambda x: count_proper_nouns(x))/df['words_counter']
+df['coma_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == ',', arr))))/df['words_counter']
+df['exclamation_mark_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == '!', arr))))/df['words_counter']
+df['question_mark_counter'] = df['tokenised_text'].apply(lambda arr: len(list(filter(lambda x: x == '?', arr))))/df['words_counter']
 #%%
 
 
 # splitting data
-from sklearn.model_selection import train_test_split
 
 X_train, X_test = train_test_split(
     df, test_size=0.3, random_state=42
@@ -145,5 +148,11 @@ print(na_ratio_cols)
 
 na_ratio_cols = X_val.isna().mean(axis=0)
 print(na_ratio_cols)
+
+corrMatrix=df.corr()
+
+sns.scatterplot(data=df, x='proper_nouns_counter', y='Ground Label')
+plt.show()
+
 
 plt.show()
