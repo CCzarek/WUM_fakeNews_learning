@@ -1,9 +1,7 @@
 # %%
 import pandas as pd
 import numpy as np
-# import matplotlib.pyplot as plt
 import warnings
-
 from langdetect import detect
 from matplotlib import pyplot as plt
 import contractions
@@ -22,25 +20,11 @@ warnings.filterwarnings('ignore')
 np.random.seed = 42
 
 df = pd.read_csv('PreProcessedData.csv')
-# print(df.head())
 
-# print(data.loc[0:3, "title"])
 
-# removing id number from df
+# usuwamy kolumnę z id
 df = df.drop(df.columns[0], axis=1)
 
-# dropping duplicated rows (9600/69045)
-df = df.drop_duplicates()
-
-# print(df.head())
-# print(len(df['text'].unique()))
-# print((df[df['text'].duplicated(keep=False)])["text"])
-
-# there are 9 instances where same news is labelled both as true and false
-# print(df[df.duplicated(subset=['title', 'text'], keep=False)])
-
-# there aren't any cases where both are NaN
-# print(df.loc[df['text'].isna() & df['title'].isna()])
 
 df["Ground Label"] = np.where(df["Ground Label"] == "true", 1, 0)
 df['text'] = df['text'].astype('string')
@@ -52,8 +36,26 @@ print(na_ratio_cols)
 df.info()
 df.hist(column='Ground Label')
 
+# %%
+# podział danych
 
-# wykrywanie języka - bo wszystkie nie-angielskie to fake (767/59445) - być może one do wywalenia (?)
+X = df.drop('Ground Label', axis=1)
+y = df['Ground Label']
+
+df, X_test, y_train, y_test = train_test_split(
+    X, y, stratify=y, test_size=0.3, random_state=42
+)
+
+df, X_val, y_train, y_val = train_test_split(
+    df, y_train, test_size=0.3, random_state=42
+)
+
+# X_train - zbiór treningowy
+# X_val - zbiór walidacyjny wewnętrzny
+# X_test - zbiór walidacyjny zewnętrzny
+
+# %%
+# wykrywanie języka - bo wszystkie nie-angielskie to fake (767/59445) - wszystkie do usunięcia
 def is_english(text):
     try:
         lang = detect(text)
@@ -61,22 +63,20 @@ def is_english(text):
         return False
     return lang == 'en'
 
-df['is_english'] = df['text'].apply(lambda x: is_english(x))
 
-
-# filling empty and na spaces
 def changeNA(text):
     if not isinstance(text, str) or pd.isnull(text) or len(text) < 3:
-        return "brak danych"
+        return "no data"
     return text
 
 
+# wypełniamy puste
 df['title'] = df['title'].apply(lambda x: changeNA(x))
 df['text'] = df['text'].apply(lambda x: changeNA(x))
 
-print('NA changed')
-
-
+# usuwanie nie-angielskich
+df['is_english'] = df['text'].apply(lambda x: is_english(x))
+df = df[df['is_english']]
 
 
 # %%
@@ -163,22 +163,7 @@ print("word counting done")
 # %%
 
 
-# splitting data
 
-X = df.drop('Ground Label', axis=1)
-y = df['Ground Label']
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, stratify=y, test_size=0.3, random_state=42
-)
-
-X_train, X_val, y_train, y_val = train_test_split(
-    X_train, y_train, test_size=0.3, random_state=42
-)
-
-# X_train - our training
-# X_val - our validation
-# X_test - external validation
 
 X_train.info()
 na_ratio_cols = X_train.isna().mean(axis=0)
