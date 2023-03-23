@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import warnings
 from langdetect import detect
-from matplotlib import pyplot as plt
 import contractions
 import nltk
 from nltk.corpus import stopwords
@@ -25,11 +24,12 @@ df = pd.read_csv('PreProcessedData.csv')
 # usuwamy kolumnę z id
 df = df.drop(df.columns[0], axis=1)
 
-
+# zmiana typów danych
 df["Ground Label"] = np.where(df["Ground Label"] == "true", 1, 0)
 df['text'] = df['text'].astype('string')
 df['title'] = df['title'].astype('string')
 
+# informacje o ramce przed przetworzeniem
 na_ratio_cols = df.isna().mean(axis=0)
 print(na_ratio_cols)
 
@@ -50,11 +50,18 @@ df, X_val, y_train, y_val = train_test_split(
     df, y_train, test_size=0.3, random_state=42
 )
 
-# X_train - zbiór treningowy
+# df - zbiór treningowy
 # X_val - zbiór walidacyjny wewnętrzny
 # X_test - zbiór walidacyjny zewnętrzny
 
+
+# zliczanie ilości wystąpień, a dopiero potem usunięcie duplikatów - w ten sposob nie tracimy informacji o ilośi wystąpień
+
+df['occurrences'] = df.groupby(['title', 'text'])['title'].transform('count')
+df = df.drop_duplicates()
+
 # %%
+
 # wykrywanie języka - bo wszystkie nie-angielskie to fake (767/59445) - wszystkie do usunięcia
 def is_english(text):
     try:
@@ -66,7 +73,7 @@ def is_english(text):
 
 def changeNA(text):
     if not isinstance(text, str) or pd.isnull(text) or len(text) < 3:
-        return "no data"
+        return ""
     return text
 
 
@@ -77,13 +84,12 @@ df['text'] = df['text'].apply(lambda x: changeNA(x))
 # usuwanie nie-angielskich
 df['is_english'] = df['text'].apply(lambda x: is_english(x))
 df = df[df['is_english']]
-
+df.drop('is_english', axis=1)
 
 # %%
 
 # contractions
 # zamienia skróty na pełne słowa (np: u - you, don't - do not)
-# jakies tureckie znaczki byly ktorych funkcja fix nie ogarniala, stad try except
 def remove_contractions(text):
     try:
         s = ' '.join([contractions.fix(word) for word in text.split()])
@@ -130,7 +136,7 @@ print("stemming done")
 # print(df['title'].head())
 
 # tokenizacja
-# Tworzymy nową kolumnę z tablicą słów użytych w tekscie, bo komp i tak nie rozumie zdan tylko se ogarnia gdzie byly jakie slowa uzywane z jakimi innymi slwoami
+# Tworzymy nową kolumnę z tablicą słów użytych w tekscie, do zrobienia kolumn zliczających liczbę nazw wlasnych itd.
 df['tokenized_text'] = df['text'].apply(lambda x: word_tokenize(x))
 df['tokenized_title'] = df['title'].apply(lambda x: word_tokenize(x))
 
@@ -162,37 +168,21 @@ print("word counting done")
 
 # %%
 
-
-
-
-X_train.info()
-na_ratio_cols = X_train.isna().mean(axis=0)
-print(na_ratio_cols)
-
-na_ratio_cols = X_test.isna().mean(axis=0)
-print(na_ratio_cols)
-
-na_ratio_cols = X_val.isna().mean(axis=0)
-print(na_ratio_cols)
-
 corrMatrix = df.corr()
 
+# wektoryzacja - tekst jako kolumny wystąpien, bo komp i tak nie rozumie zdan tylko se ogarnia gdzie byly jakie slowa uzywane z jakimi innymi slwoami
 
-# wektoryzacja - rozbicie tekstu na kolumny zliczające ilość wystąpień słów
+vectorizer = TfidfVectorizer()
+vec_title = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['title']))
+vec_text = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['text']))
 
-# X_stats_train = X_train.drop(['title', 'text', 'tokenized_text', 'tokenized_title'], axis=1)
-# X_stats_val = X_val.drop(['title', 'text', 'tokenized_text', 'tokenized_title'], axis=1)
-#
-# vectorizer_title = TfidfVectorizer()
-# Xv_title_train = vectorizer_title.fit_transform(X_train['title'])
-# Xv_title_val = vectorizer_title.transform(X_val['title'])
-#
-# vectorizer_text = TfidfVectorizer()
-# Xv_text_train = vectorizer_text.fit_transform(X_train['text'])
-# Xv_text_val = vectorizer_text.transform(X_val['text'])
-#
-# coś sie tu wykrzacza
-# X_train= hstack([X_stats_train, Xv_title_train, Xv_text_train])
-# X_test= hstack([X_stats_val, Xv_title_val, Xv_text_val])
-#
-# print(list(X_train.columns))
+vec = pd.DataFrame(hstack([vec_title, vec_text]))
+
+#print(vec.shape)
+
+additional_cols = df.drop(['title', 'text', 'tokenized_text', 'tokenized_title'], axis=1)
+vec = vec.join(additional_cols)
+
+print("vectorization done")
+#vec.to_csv('processed_fakenews.csv', index=False)
+
