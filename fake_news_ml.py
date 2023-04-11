@@ -37,30 +37,12 @@ df.info()
 df.hist(column='Ground Label')
 
 # %%
-# podział danych
-
-X = df.drop('Ground Label', axis=1)
-y = df['Ground Label']
-
-df, X_test, y_train, y_test = train_test_split(
-    X, y, stratify=y, test_size=0.3, random_state=42
-)
-
-df, X_val, y_train, y_val = train_test_split(
-    df, y_train, test_size=0.3, random_state=42
-)
-
-# df - zbiór treningowy
-# X_val - zbiór walidacyjny wewnętrzny
-# X_test - zbiór walidacyjny zewnętrzny
-
 
 # zliczanie ilości wystąpień, a dopiero potem usunięcie duplikatów - w ten sposob nie tracimy informacji o ilośi wystąpień
 
 df['occurrences'] = df.groupby(['title', 'text'])['title'].transform('count')
 df = df.drop_duplicates()
 
-# %%
 
 # wykrywanie języka - bo wszystkie nie-angielskie to fake (767/59445) - wszystkie do usunięcia
 def is_english(text):
@@ -77,16 +59,39 @@ def changeNA(text):
     return text
 
 
-# wypełniamy puste
-df['title'] = df['title'].apply(lambda x: changeNA(x))
-df['text'] = df['text'].apply(lambda x: changeNA(x))
-
 # usuwanie nie-angielskich
 df['is_english'] = df['text'].apply(lambda x: is_english(x))
 df = df[df['is_english']]
 df.drop('is_english', axis=1)
 
 # %%
+
+# podział danych
+
+X = df.drop('Ground Label', axis=1)
+y = df['Ground Label']
+
+df, df_test, y_train, y_test = train_test_split(
+    X, y, stratify=y, test_size=0.3, random_state=42
+)
+
+df, X_val, y_train, y_val = train_test_split(
+    df, y_train, test_size=0.3, random_state=42
+)
+
+# df - zbiór treningowy
+# X_val - zbiór walidacyjny wewnętrzny
+# X_test - zbiór walidacyjny zewnętrzny
+
+# %%
+
+
+# wypełniamy puste
+df['title'] = df['title'].apply(lambda x: changeNA(x))
+df['text'] = df['text'].apply(lambda x: changeNA(x))
+
+df_test['title'] = df_test['title'].apply(lambda x: changeNA(x))
+df_test['text'] = df_test['text'].apply(lambda x: changeNA(x))
 
 # contractions
 # zamienia skróty na pełne słowa (np: u - you, don't - do not)
@@ -100,6 +105,9 @@ def remove_contractions(text):
 
 df['title'] = df['title'].apply(lambda x: remove_contractions(x))
 df['text'] = df['text'].apply(lambda x: remove_contractions(x))
+
+df_test['title'] = df_test['title'].apply(lambda x: remove_contractions(x))
+df_test['text'] = df_test['text'].apply(lambda x: remove_contractions(x))
 
 print('contractions removed')
 # %%
@@ -118,6 +126,9 @@ def remove_stopwords(text):
 df['title'] = df['title'].apply(lambda x: remove_stopwords(x))
 df['text'] = df['text'].apply(lambda x: remove_stopwords(x))
 
+df_test['title'] = df_test['title'].apply(lambda x: remove_stopwords(x))
+df_test['text'] = df_test['text'].apply(lambda x: remove_stopwords(x))
+
 print('stopwords removed')
 
 # stemming
@@ -129,8 +140,10 @@ def stem_words(text):
 
 
 df['title'] = df['title'].apply(lambda x: stem_words(x))
-# takes some time:
 df["text"] = df["text"].apply(lambda x: stem_words(x))
+
+df_test['title'] = df_test['title'].apply(lambda x: stem_words(x))
+df_test["text"] = df_test["text"].apply(lambda x: stem_words(x))
 
 print("stemming done")
 # print(df['title'].head())
@@ -139,6 +152,9 @@ print("stemming done")
 # Tworzymy nową kolumnę z tablicą słów użytych w tekscie, do zrobienia kolumn zliczających liczbę nazw wlasnych itd.
 df['tokenized_text'] = df['text'].apply(lambda x: word_tokenize(x))
 df['tokenized_title'] = df['title'].apply(lambda x: word_tokenize(x))
+
+df_test['tokenized_text'] = df_test['text'].apply(lambda x: word_tokenize(x))
+df_test['tokenized_title'] = df_test['title'].apply(lambda x: word_tokenize(x))
 
 print("tokenization done")
 
@@ -164,6 +180,17 @@ df['exclamation_mark_counter'] = df['tokenized_text'].apply(lambda arr: len(list
 df['question_mark_counter'] = df['tokenized_text'].apply(lambda arr: len(list(filter(lambda x: x == '?', arr)))) / df[
     'words_counter']
 
+
+df_test['words_counter'] = df_test['text'].apply(lambda x: len(x.split()))
+
+df_test['proper_nouns_counter'] = df_test['tokenized_text'].apply(lambda x: count_proper_nouns(x)) / df_test['words_counter']
+df_test['coma_counter'] = df_test['tokenized_text'].apply(lambda arr: len(list(filter(lambda x: x == ',', arr)))) / df_test[
+    'words_counter']
+df_test['exclamation_mark_counter'] = df_test['tokenized_text'].apply(lambda arr: len(list(filter(lambda x: x == '!', arr)))) / \
+                                 df_test['words_counter']
+df_test['question_mark_counter'] = df_test['tokenized_text'].apply(lambda arr: len(list(filter(lambda x: x == '?', arr)))) / df_test[
+    'words_counter']
+
 print("word counting done")
 
 # %%
@@ -172,17 +199,63 @@ corrMatrix = df.corr()
 
 # wektoryzacja - tekst jako kolumny wystąpien, bo komp i tak nie rozumie zdan tylko se ogarnia gdzie byly jakie slowa uzywane z jakimi innymi slwoami
 
-vectorizer = TfidfVectorizer()
+vectorizer = TfidfVectorizer(max_df=0.7, min_df=50)
 vec_title = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['title']))
 vec_text = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['text']))
 
-vec = pd.DataFrame(hstack([vec_title, vec_text]))
+vec_title_test = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df_test['title']))
+vec_text_test = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df_test['text']))
 
-#print(vec.shape)
+'''
+prawie nic nie usuwa
+def correlations(df, max_acceptable_corr):
+        corr = df.corr()
+        correlations_map = {}
+        for col in corr.columns: 
+            correlations_map[col] = corr.loc[(abs(corr[col]) > max_acceptable_corr).tolist(), col].index.tolist()
+        keys_to_remove = []
+        for key in correlations_map:
+            if len(correlations_map[key]) <= 1:
+                keys_to_remove.append(key)
+            else:
+                correlations_map[key].remove(key)
+        for key in keys_to_remove:
+            del correlations_map[key]
+        return correlations_map
 
-additional_cols = df.drop(['title', 'text', 'tokenized_text', 'tokenized_title'], axis=1)
-vec = vec.join(additional_cols)
+        
+def remove_correlated_cols(df, max_acceptable_corr):
+    start_cols = df.shape[1]
+    c = correlations(df, max_acceptable_corr)
+    for key in c:
+        if not key in df.columns:
+            continue
+        cols = c[key]
+        for col in cols:
+            if col in df.columns:
+                df.drop(col, axis=1, inplace=True)
+    print("Pozostało " + str(df.shape[1]) + " kolumn.")
+    print("Usunięto " + str(start_cols - df.shape[1]) + " kolumn.")
+    
+remove_correlated_cols(vec_title, 0.8) 
+'''
 
-print("vectorization done")
-#vec.to_csv('processed_fakenews.csv', index=False)
+# łączenie
+df_numeric = df.iloc[:, [2,6,7,8,9,10]]
 
+X_train = pd.concat([df_numeric, vec_text, vec_title], axis=1, join='inner')
+
+df_test_num = df_test.iloc[:, [2,6,7,8,9,10]]
+X_test = pd.concat([df_test_num, vec_text_test, vec_title_test], axis=1, join='inner')
+
+# %%
+
+# łączenie i tworzenie modelu
+
+
+from sklearn.naive_bayes import MultinomialNB
+model1 = MultinomialNB().fit(X_train, y_train)
+
+from sklearn.metrics import accuracy_score
+y_hat = model1.predict(X_test)
+print('accuracy: ', accuracy_score(y_test, y_hat))
