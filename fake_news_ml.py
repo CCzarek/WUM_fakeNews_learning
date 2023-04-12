@@ -87,6 +87,10 @@ df, X_val, y_train, y_val = train_test_split(
 
 # %% 4
 
+def nanToOne(x):
+    if pd.isna(x):
+        return 1
+    return x
 
 # wypełniamy puste
 df['title'] = df['title'].apply(lambda x: changeNA(x))
@@ -202,12 +206,15 @@ corrMatrix = df.corr()
 # wektoryzacja - tekst jako kolumny wystąpien, bo komp i tak nie rozumie zdan tylko se ogarnia gdzie byly jakie slowa uzywane z jakimi innymi slwoami
 
 #vectorizer = TfidfVectorizer(max_df=0.7, min_df=50)
-vectorizer = TfidfVectorizer()
-vec_title = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['title']))
-vec_text = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['text']))
+vectorizerTitle = TfidfVectorizer()
+vectorizerText = TfidfVectorizer()
+vectorizerTitle.fit(df['title'])
+vectorizerText.fit(df['text'])
+vec_title = pd.DataFrame.sparse.from_spmatrix(vectorizerTitle.transform(df['title']))
+vec_text = pd.DataFrame.sparse.from_spmatrix(vectorizerText.transform(df['text']))
 
-vec_title_test = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df_test['title']))
-vec_text_test = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df_test['text']))
+vec_title_test = pd.DataFrame.sparse.from_spmatrix(vectorizerTitle.transform(df_test['title']))
+vec_text_test = pd.DataFrame.sparse.from_spmatrix(vectorizerText.transform(df_test['text']))
 
 '''
 prawie nic nie usuwa
@@ -244,28 +251,34 @@ remove_correlated_cols(vec_title, 0.8)
 '''
 
 # łączenie
-df.reset_index()
+df = df.reset_index(drop=True)
 df_numeric = df.iloc[:, [2,6,7,8,9,10]]
-
 vectorized = pd.concat([vec_text, vec_title], axis=1)
-X_train = pd.concat([df, vectorized], axis=1)
+X_train = pd.concat([df_numeric, vectorized], axis=1)
+
+df_test = df_test.reset_index(drop=True)
 df_test_num = df_test.iloc[:, [2,6,7,8,9,10]]
 X_test = pd.concat([df_test_num, vec_text_test, vec_title_test], axis=1, join='inner')
 
 # %% 7
 
-# łączenie i tworzenie modelu
+# tworzenie modelu
 from sklearn.metrics import accuracy_score
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
 
-'''
+X_test.isnull().any()
+X_train['occurrences'] = X_train['occurrences'].apply(lambda x: nanToOne(x))
+X_test['occurrences'] = X_test['occurrences'].apply(lambda x: nanToOne(x))
+
+X_train.columns = X_train.columns.astype(str)
+X_test.columns = X_test.columns.astype(str)
+
 model1 = MultinomialNB().fit(X_train, y_train)
 y_hat = model1.predict(X_test)
 print('accuracy: ', accuracy_score(y_test, y_hat))
-'''
 
 model2 = LogisticRegression().fit(X_train, y_train)
 y_hat2 = model2.predict(X_test)
-print('accuracy: ', accuracy_score(y_test, y_hat))
+print('accuracy: ', accuracy_score(y_test, y_hat2))
 
