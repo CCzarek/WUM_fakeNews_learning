@@ -1,4 +1,4 @@
-# %%
+# %% 1
 import pandas as pd
 import numpy as np
 import warnings
@@ -20,6 +20,8 @@ np.random.seed = 42
 
 df = pd.read_csv('PreProcessedData.csv')
 
+df = df.sample(frac=0.01)
+
 
 # usuwamy kolumnę z id
 df = df.drop(df.columns[0], axis=1)
@@ -36,7 +38,7 @@ print(na_ratio_cols)
 df.info()
 df.hist(column='Ground Label')
 
-# %%
+# %% 2
 
 # zliczanie ilości wystąpień, a dopiero potem usunięcie duplikatów - w ten sposob nie tracimy informacji o ilośi wystąpień
 
@@ -64,7 +66,7 @@ df['is_english'] = df['text'].apply(lambda x: is_english(x))
 df = df[df['is_english']]
 df.drop('is_english', axis=1)
 
-# %%
+# %% 3
 
 # podział danych
 
@@ -83,7 +85,7 @@ df, X_val, y_train, y_val = train_test_split(
 # X_val - zbiór walidacyjny wewnętrzny
 # X_test - zbiór walidacyjny zewnętrzny
 
-# %%
+# %% 4
 
 
 # wypełniamy puste
@@ -110,7 +112,7 @@ df_test['title'] = df_test['title'].apply(lambda x: remove_contractions(x))
 df_test['text'] = df_test['text'].apply(lambda x: remove_contractions(x))
 
 print('contractions removed')
-# %%
+# %% 5
 
 
 # stop words
@@ -193,13 +195,14 @@ df_test['question_mark_counter'] = df_test['tokenized_text'].apply(lambda arr: l
 
 print("word counting done")
 
-# %%
+# %% 6
 
 corrMatrix = df.corr()
 
 # wektoryzacja - tekst jako kolumny wystąpien, bo komp i tak nie rozumie zdan tylko se ogarnia gdzie byly jakie slowa uzywane z jakimi innymi slwoami
 
-vectorizer = TfidfVectorizer(max_df=0.7, min_df=50)
+#vectorizer = TfidfVectorizer(max_df=0.7, min_df=50)
+vectorizer = TfidfVectorizer()
 vec_title = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['title']))
 vec_text = pd.DataFrame.sparse.from_spmatrix(vectorizer.fit_transform(df['text']))
 
@@ -241,21 +244,28 @@ remove_correlated_cols(vec_title, 0.8)
 '''
 
 # łączenie
+df.reset_index()
 df_numeric = df.iloc[:, [2,6,7,8,9,10]]
 
-X_train = pd.concat([df_numeric, vec_text, vec_title], axis=1, join='inner')
-
+vectorized = pd.concat([vec_text, vec_title], axis=1)
+X_train = pd.concat([df, vectorized], axis=1)
 df_test_num = df_test.iloc[:, [2,6,7,8,9,10]]
 X_test = pd.concat([df_test_num, vec_text_test, vec_title_test], axis=1, join='inner')
 
-# %%
+# %% 7
 
 # łączenie i tworzenie modelu
-
-
-from sklearn.naive_bayes import MultinomialNB
-model1 = MultinomialNB().fit(X_train, y_train)
-
 from sklearn.metrics import accuracy_score
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import LogisticRegression
+
+'''
+model1 = MultinomialNB().fit(X_train, y_train)
 y_hat = model1.predict(X_test)
 print('accuracy: ', accuracy_score(y_test, y_hat))
+'''
+
+model2 = LogisticRegression().fit(X_train, y_train)
+y_hat2 = model2.predict(X_test)
+print('accuracy: ', accuracy_score(y_test, y_hat))
+
