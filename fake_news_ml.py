@@ -15,10 +15,9 @@ from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import GradientBoostingClassifier, VotingClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
+from xgboost import XGBClassifier, plot_importance
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, roc_curve
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
@@ -28,7 +27,7 @@ np.random.seed = 42
 
 df = pd.read_csv('PreProcessedData.csv')
 
-# df = df.sample(frac=0.1, random_state=42)
+# df = df.sample(frac=0.05, random_state=42)
 
 # usuwamy kolumnę z id
 df = df.drop(df.columns[0], axis=1)
@@ -140,7 +139,7 @@ print('contractions removed')
 stop_words = set(stopwords.words('english'))
 
 def remove_stopwords(text):
-    return " ".join([word for word in str(text).split() if word not in stop_words])
+    return " ".join([word for word in str(text).lower().split() if word not in stop_words])
 
 
 df['title'] = df['title'].apply(lambda x: remove_stopwords(x))
@@ -254,16 +253,24 @@ remove_correlated_cols(vec_title, 0.8)
 
 # wektoryzacja - tekst jako kolumny wystąpien, bo komp i tak nie rozumie zdan tylko se ogarnia gdzie byly jakie slowa uzywane z jakimi innymi slwoami
 
+# ustalamy minimalny i maksymalny próg częstotliwości występowania, wg których do modelu weźmiemy tylko część słów
+# dla max_df = 0.7 i/lub min_df = 0.005 predykcyjność była gorsza
+max_df = 0.6
+min_df = 0.01
 
-vectorizerTitle = TfidfVectorizer(max_df=0.6, min_df=0.01)
-vectorizerText = TfidfVectorizer(max_df=0.6, min_df=0.01)
+vectorizerTitle = TfidfVectorizer(max_df=max_df, min_df=min_df)
+vectorizerText = TfidfVectorizer(max_df=max_df, min_df=min_df)
+
 vectorizerTitle.fit(df['title'])
 vectorizerText.fit(df['text'])
-vec_title = pd.DataFrame.sparse.from_spmatrix(vectorizerTitle.transform(df['title']))
-vec_text = pd.DataFrame.sparse.from_spmatrix(vectorizerText.transform(df['text']))
 
-vec_title_test = pd.DataFrame.sparse.from_spmatrix(vectorizerTitle.transform(df_test['title']))
-vec_text_test = pd.DataFrame.sparse.from_spmatrix(vectorizerText.transform(df_test['text']))
+cols_title = vectorizerTitle.get_feature_names()
+cols_text = vectorizerText.get_feature_names()
+vec_title = pd.DataFrame.sparse.from_spmatrix(vectorizerTitle.transform(df['title']), columns=cols_title)
+vec_text = pd.DataFrame.sparse.from_spmatrix(vectorizerText.transform(df['text']), columns=cols_text)
+
+vec_title_test = pd.DataFrame.sparse.from_spmatrix(vectorizerTitle.transform(df_test['title']), columns=cols_title)
+vec_text_test = pd.DataFrame.sparse.from_spmatrix(vectorizerText.transform(df_test['text']), columns=cols_text)
 
 # łączenie
 #print(df.columns)
@@ -272,52 +279,66 @@ df = df.reset_index(drop=True)
 df_numeric = df.iloc[:, [2, 5, 6, 7, 8, 9]]
 X_train = pd.concat([df_numeric, vec_text, vec_title], axis=1)
 
+
 df_test = df_test.reset_index(drop=True)
 df_test_num = df_test.iloc[:, [2, 5, 6, 7, 8, 9]]
 X_test = pd.concat([df_test_num, vec_text_test, vec_title_test], axis=1, join='inner')
 
 print("vectorization done")
 
-print(type(y_train))
 print(X_train.shape)
 print(X_test.shape)
 print(y_train.shape)
 print(y_test.shape)
 
-X_train.to_csv("train_preprocessed_full.csv", index= False)
-X_test.to_csv("test_preprocessed_full.csv", index= False)
-y_train.to_csv("y_train_preprocessed_full.csv", index= False)
-y_test.to_csv("y_test_preprocessed_full.csv", index= False)
-
-# %% 8
-
-# tworzenie modeli
-
-X_train = pd.read_csv('train_preprocessed_full.csv')
-X_test = pd.read_csv('test_preprocessed_full.csv')
-y_train = np.ravel(pd.read_csv("y_train_preprocessed_full.csv"))
-y_test = np.ravel(pd.read_csv("y_test_preprocessed_full.csv"))
+X_train.to_csv("train_preprocessed_full_2504.csv", index= False)
+X_test.to_csv("test_preprocessed_full_2504.csv", index= False)
+y_train.to_csv("y_train_preprocessed_full_2504.csv", index= False)
+y_test.to_csv("y_test_preprocessed_full_2504.csv", index= False)
+#
+# # %% 8
+#
+X_train = pd.read_csv('train_preprocessed_full_2504.csv')
+X_test = pd.read_csv('test_preprocessed_full_2504.csv')
+y_train = np.ravel(pd.read_csv("y_train_preprocessed_full_2504.csv"))
+y_test = np.ravel(pd.read_csv("y_test_preprocessed_full_2504.csv"))
 
 # X_train.columns = X_train.columns.astype(str)
 # X_test.columns = X_test.columns.astype(str)
 
+# zobaczmy jaka będzie predykcyjność bez uwzględniania słowa 'reuters' (pojawiającego się tylko przy prawdzie)
+X_train = X_train.drop('reuters', axis=1)
+X_test = X_test.drop('reuters', axis = 1)
+
 classifiers = [
-    DummyClassifier(strategy='stratified'),
+    #DummyClassifier(strategy='stratified'),
     ExtraTreeClassifier(),
     RandomForestClassifier(),
     LogisticRegression(),
-    GradientBoostingClassifier(),  # duzo czasu
+    GradientBoostingClassifier(),
     DecisionTreeClassifier(),
-    # XGBClassifier(),
-    # SVC(),
-    MultinomialNB()
+    XGBClassifier(),
+    MultinomialNB(),
 ]
 
-# TODO przetestowac xgboost i svc, poprawic kod żeby dzialalo też dla nich
 
+def important_features_plot(features, importance, name):
+    sorted_feats = ([x for _, x in sorted(zip(importance, features), reverse=True)])[0:24]
+    importance_vals = sorted(importance, reverse=True)[0:24]
+    # creating the bar plot
+    plt.bar(sorted_feats, importance_vals)
+    plt.xlabel("Feature")
+    plt.ylabel("Importance")
+    plt.title(name)
+    plt.xticks(rotation=75)
+    pyplot.tight_layout()
+    plt.show()
+
+columns = list(X_train.columns)
 models_df = pd.DataFrame()
 for model in classifiers:
     # tworzymy modele, mierząc ile to trwa i obliczając rezultaty z każdego klasyfikatora
+    name = model.__class__.__name__
 
     start_time = time.time()
 
@@ -327,16 +348,32 @@ for model in classifiers:
 
     end_time = time.time()
 
-    # sprawdzamy jak wyszło różnymi metrykami
+    # sprawdzamy jak wyszło
     presicision = precision_score(y_test, y_hat)
     accuracy = accuracy_score(y_test, y_hat)
     recall = recall_score(y_test, y_hat)
     f1 = f1_score(y_test, y_hat)
     roc_auc = roc_auc_score(y_test, y_probs)
 
+    if name=="XGBClassifier":
+        plot_importance(model, max_num_features=25)
+        pyplot.tight_layout()
+        plt.show()
+    else:
+        print(name)
+        if name=="LogisticRegression" or name=="MultinomialNB":
+            importances = list(model.coef_[0])
+        else:
+            importances = list(model.feature_importances_)
+        print("Klasyfikator: " + name)
+        print("Kolumny o wpływie o wartości 0: " + str(importances.count(0)))
+        print("Najbardziej znacząca kolumna: " + columns[importances.index(max(importances))])
+        important_features_plot(columns, importances, name)
+
+
     # zbieramy wyniki
     param_dict = {
-        'model': model.__class__.__name__,
+        'model': name,
         'precision': presicision,
         'accuracy': accuracy,
         'recall': recall,
@@ -347,15 +384,13 @@ for model in classifiers:
 
     fpr, tpr, _ = roc_curve(y_test, y_probs)
     pyplot.plot(fpr, tpr, linestyle='-', label=model.__class__.__name__)
+    pyplot.show()
 
     models_df = models_df.append(pd.DataFrame(param_dict, index=[0]))
 
 print('basic modeling done')
 
-# %% 9
 # weźmy najlepsze i pokobinujmy z votingiem z ich kombinacjami, moze bedzie lepiej
-
-# TODO byc może da się zoptymalizować, bo obecnie przy każdej kombinacji tworzony jest na nowo każdy model, co troche zajmuje
 
 def voting_cassifier(voting, classifiers):
 
@@ -381,6 +416,7 @@ def voting_cassifier(voting, classifiers):
     f1 = f1_score(y_test, y_hat)
     roc_auc = roc_auc_score(y_test, y_probs)
 
+
     # zbieramy wyniki
 
     param_dict = {
@@ -402,7 +438,7 @@ def voting_cassifier(voting, classifiers):
 best_classifiers = [GradientBoostingClassifier(),
                        RandomForestClassifier(),
                        LogisticRegression(),
-                       DecisionTreeClassifier()]
+                       XGBClassifier()]
 
 for L in range(2, len(best_classifiers) + 1):
     for subset in itertools.combinations(best_classifiers, L):
@@ -420,4 +456,4 @@ pyplot.legend()
 pyplot.show()
 
 print('modeling done')
-models_df.to_csv('models_voting_full.csv', index=False)
+models_df.to_csv('models-full-2504.csv', index=False)
